@@ -7,9 +7,12 @@ import {
   InteractionResponseType,
   verifyKey,
 } from "discord-interactions";
-import { primetimeOptions, longOptions } from "@/lib/abmeldung-options";
 
-/* ─────────────── TYPES ─────────────── */
+import { primetimeOptions, longOptions } from "@/lib/abmeldung-options";
+import { calculateEnd } from "@/lib/abmeldung-end";
+import { supabase } from "@/lib/supabase";
+
+/* ───────────── TYPES ───────────── */
 
 type BaseInteraction = {
   id: string;
@@ -19,7 +22,7 @@ type BaseInteraction = {
   type: InteractionType;
 };
 
-type ApplicationCommandInteraction = BaseInteraction & {
+type CommandInteraction = BaseInteraction & {
   type: InteractionType.APPLICATION_COMMAND;
   data: { name: string };
 };
@@ -39,44 +42,46 @@ type SelectInteraction = BaseInteraction & {
   };
 };
 
-/* ─────────────── HANDLER ─────────────── */
+/* ───────────── HANDLER ───────────── */
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const publicKey = process.env.DISCORD_PUBLIC_KEY;
-  if (!publicKey) return NextResponse.json({}, { status: 500 });
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+
+  if (!publicKey || !botToken) {
+    return NextResponse.json({}, { status: 500 });
+  }
 
   const signature = req.headers.get("x-signature-ed25519");
   const timestamp = req.headers.get("x-signature-timestamp");
-  const body = await req.text(); // RAW BODY
+  const body = await req.text();
 
   if (!signature || !timestamp) {
     return NextResponse.json({}, { status: 401 });
   }
 
-  const isValid = await verifyKey(body, signature, timestamp, publicKey);
-  if (!isValid) {
+  const valid = await verifyKey(body, signature, timestamp, publicKey);
+  if (!valid) {
     return NextResponse.json({}, { status: 401 });
   }
 
   const interaction = JSON.parse(body) as BaseInteraction;
 
-  /* ─────────────── PING ─────────────── */
+  /* ───── PING ───── */
   if (interaction.type === InteractionType.PING) {
-    return NextResponse.json({
-      type: InteractionResponseType.PONG,
-    });
+    return NextResponse.json({ type: InteractionResponseType.PONG });
   }
 
-  /* ─────────────── /abmeldung ─────────────── */
+  /* ───── /abmeldung ───── */
   if (
     interaction.type === InteractionType.APPLICATION_COMMAND &&
-    (interaction as ApplicationCommandInteraction).data.name === "abmeldung"
+    (interaction as CommandInteraction).data.name === "abmeldung"
   ) {
     return NextResponse.json({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: "📝 **Abmeldung auswählen**",
-        flags: 64, // ✅ ephemeral
+        flags: 64,
         components: [
           {
             type: 1,
@@ -105,7 +110,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     });
   }
 
-  /* ─────────────── SELECT HANDLER ─────────────── */
+  /* ───── SELECT ───── */
   if (
     interaction.type === InteractionType.MESSAGE_COMPONENT &&
     (interaction as SelectInteraction).data.custom_id.startsWith("abmeldung_")
@@ -122,13 +127,72 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const description = option?.description ?? selectedValue;
 
     const displayName =
-      select.member.nick ??
-      select.member.user.username;
+      select.member.nick ?? select.member.user.username;
 
+    const endAt = calculateEnd(selectedValue);
+
+    /* 🧵 THREAD ERSTELLEN */
+    const threadRes = await fetch(
+      `https://discord.com/api/v10/channels/${interaction.channel_id}/threads`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: displayName,
+          auto_archive_duration: 1440,
+        }),
+      }
+    );
+
+    const thread = await threadRes.json();
+
+    /* 📌 THREAD INFO */
+    await fetch(
+      `https://discord.com/api/v10/channels/${thread.id}/messages`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          embeds: [
+            {
+              title: "📝 Abmeldung",
+              color: 0xf59e0b,
+              fields: [
+                { name: "👤 User", value: displayName },
+                { name: "📌 Art", value: description },
+                {
+                  name: "⏰ Abgemeldet bis",
+                  value: endAt.toLocaleString("de-DE"),
+                },
+              ],
+              timestamp: new Date().toISOString(),
+            },
+          ],
+        }),
+      }
+    );
+
+    /* 💾 SUPABASE */
+    await supabase.from("abmeldungen").insert({
+      discord_user_id: select.member.user.id,
+      discord_name: displayName,
+      thread_id: thread.id,
+      channel_id: interaction.channel_id,
+      abmeldung_typ: selectedValue,
+      ends_at: endAt.toISOString(),
+    });
+
+    /* ✅ BESTÄTIGUNG */
     return NextResponse.json({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        flags: 64, // ✅ ephemeral = verschwindet automatisch
+        flags: 64,
         embeds: [
           {
             title: "✅ Abmeldung registriert",
@@ -138,7 +202,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               { name: "📌 Abmeldung", value: description, inline: true },
             ],
             footer: {
-              text: "Danke für deine Abmeldung 🙌",
+              text: "Der Thread wurde automatisch erstellt 🧵",
             },
             timestamp: new Date().toISOString(),
           },
