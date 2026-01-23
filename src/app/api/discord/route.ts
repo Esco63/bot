@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -6,6 +7,11 @@ import {
   InteractionResponseType,
   verifyKey,
 } from "discord-interactions";
+
+/* Discord ruft teilweise GET auf */
+export async function GET(): Promise<NextResponse> {
+  return NextResponse.json({ ok: true });
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const publicKey = process.env.DISCORD_PUBLIC_KEY;
@@ -28,7 +34,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const interaction = JSON.parse(body);
 
-  // 🔑 DISCORD VALIDATION
+  /* 🔑 Pflicht für Discord-Verifikation */
   if (interaction.type === InteractionType.PING) {
     return NextResponse.json({
       type: InteractionResponseType.PONG,
