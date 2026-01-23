@@ -8,7 +8,7 @@ import {
   verifyKey,
 } from "discord-interactions";
 
-/* Discord ruft teilweise GET auf */
+/* 🔑 Discord testet GET */
 export async function GET(): Promise<NextResponse> {
   return NextResponse.json({ ok: true });
 }
@@ -34,7 +34,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const interaction = JSON.parse(body);
 
-  /* 🔑 Pflicht für Discord-Verifikation */
   if (interaction.type === InteractionType.PING) {
     return NextResponse.json({
       type: InteractionResponseType.PONG,
