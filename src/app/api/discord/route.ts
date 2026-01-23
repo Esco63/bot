@@ -2,42 +2,36 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import {
-  InteractionType,
-  InteractionResponseType,
-  verifyKey,
-} from "discord-interactions";
-
-/* Discord macht GET beim Validieren */
-export async function GET() {
-  return NextResponse.json({ ok: true });
-}
+import { InteractionType, InteractionResponseType, verifyKey } from "discord-interactions";
 
 export async function POST(req: NextRequest) {
+  console.log("HIT /api/discord");
+
   const publicKey = process.env.DISCORD_PUBLIC_KEY;
-  if (!publicKey) {
-    return NextResponse.json({ error: "Missing public key" }, { status: 500 });
+  console.log("HAS_KEY", Boolean(publicKey));
+
+  const sig = req.headers.get("x-signature-ed25519");
+  const ts = req.headers.get("x-signature-timestamp");
+  console.log("HEADERS", { sig: Boolean(sig), ts: Boolean(ts) });
+
+  const body = await req.text();
+  console.log("BODY", body);
+
+  if (!publicKey || !sig || !ts) {
+    return NextResponse.json({}, { status: 401 });
   }
 
-  const signature = req.headers.get("x-signature-ed25519");
-  const timestamp = req.headers.get("x-signature-timestamp");
-  const body = await req.text(); // 🔑 raw body, extrem wichtig
+  const valid = verifyKey(body, sig, ts, publicKey);
+  console.log("VALID", valid);
 
-  if (!signature || !timestamp) {
-    return NextResponse.json({ error: "Bad request" }, { status: 401 });
-  }
-
-  const isValid = verifyKey(body, signature, timestamp, publicKey);
-  if (!isValid) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+  if (!valid) {
+    return NextResponse.json({}, { status: 401 });
   }
 
   const interaction = JSON.parse(body);
 
   if (interaction.type === InteractionType.PING) {
-    return NextResponse.json({
-      type: InteractionResponseType.PONG,
-    });
+    return NextResponse.json({ type: InteractionResponseType.PONG });
   }
 
   return NextResponse.json({
