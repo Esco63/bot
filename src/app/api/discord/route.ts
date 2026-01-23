@@ -2,36 +2,39 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
-import { InteractionType, InteractionResponseType, verifyKey } from "discord-interactions";
+import {
+  InteractionType,
+  InteractionResponseType,
+  verifyKey,
+} from "discord-interactions";
 
 export async function POST(req: NextRequest) {
-  console.log("HIT /api/discord");
-
   const publicKey = process.env.DISCORD_PUBLIC_KEY;
-  console.log("HAS_KEY", Boolean(publicKey));
+  if (!publicKey) {
+    return NextResponse.json({}, { status: 500 });
+  }
 
-  const sig = req.headers.get("x-signature-ed25519");
-  const ts = req.headers.get("x-signature-timestamp");
-  console.log("HEADERS", { sig: Boolean(sig), ts: Boolean(ts) });
+  const signature = req.headers.get("x-signature-ed25519");
+  const timestamp = req.headers.get("x-signature-timestamp");
+  const body = await req.text(); // RAW BODY
 
-  const body = await req.text();
-  console.log("BODY", body);
-
-  if (!publicKey || !sig || !ts) {
+  if (!signature || !timestamp) {
     return NextResponse.json({}, { status: 401 });
   }
 
-  const valid = verifyKey(body, sig, ts, publicKey);
-  console.log("VALID", valid);
+  // 🔑 HIER WAR DER BUG → await!
+  const isValid = await verifyKey(body, signature, timestamp, publicKey);
 
-  if (!valid) {
+  if (!isValid) {
     return NextResponse.json({}, { status: 401 });
   }
 
   const interaction = JSON.parse(body);
 
   if (interaction.type === InteractionType.PING) {
-    return NextResponse.json({ type: InteractionResponseType.PONG });
+    return NextResponse.json({
+      type: InteractionResponseType.PONG,
+    });
   }
 
   return NextResponse.json({
