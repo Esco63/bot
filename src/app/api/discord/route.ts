@@ -43,8 +43,6 @@ type SelectInteraction = BaseInteraction & {
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const publicKey = process.env.DISCORD_PUBLIC_KEY;
-  const botToken = process.env.DISCORD_BOT_TOKEN;
-
   if (!publicKey) return NextResponse.json({}, { status: 500 });
 
   const signature = req.headers.get("x-signature-ed25519");
@@ -78,6 +76,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
         content: "📝 **Abmeldung auswählen**",
+        flags: 64, // ✅ ephemeral
         components: [
           {
             type: 1,
@@ -123,55 +122,28 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const description = option?.description ?? selectedValue;
 
     const displayName =
-      select.member.nick ||
+      select.member.nick ??
       select.member.user.username;
 
-    /* ───── Antwort senden ───── */
-    const response = await fetch(
-      `https://discord.com/api/v10/webhooks/${interaction.application_id}/${interaction.token}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          embeds: [
-            {
-              title: "✅ Abmeldung registriert",
-              color: 0x22c55e,
-              fields: [
-                { name: "👤 User", value: displayName, inline: true },
-                { name: "📌 Abmeldung", value: description, inline: true },
-              ],
-              footer: { text: "Diese Nachricht verschwindet automatisch ⏳" },
-              timestamp: new Date().toISOString(),
-            },
-          ],
-        }),
-      }
-    );
-
-    /* ───── Nachricht nach 1h löschen ───── */
-    if (botToken && response.ok) {
-      const message = await response.json();
-
-      setTimeout(async () => {
-        try {
-          await fetch(
-            `https://discord.com/api/v10/channels/${interaction.channel_id}/messages/${message.id}`,
-            {
-              method: "DELETE",
-              headers: {
-                Authorization: `Bot ${botToken}`,
-              },
-            }
-          );
-        } catch (err) {
-          console.error("Auto-Delete fehlgeschlagen:", err);
-        }
-      }, 60 * 60 * 1000); // 1 Stunde
-    }
-
     return NextResponse.json({
-      type: InteractionResponseType.DEFERRED_UPDATE_MESSAGE,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: 64, // ✅ ephemeral = verschwindet automatisch
+        embeds: [
+          {
+            title: "✅ Abmeldung registriert",
+            color: 0x22c55e,
+            fields: [
+              { name: "👤 User", value: displayName, inline: true },
+              { name: "📌 Abmeldung", value: description, inline: true },
+            ],
+            footer: {
+              text: "Danke für deine Abmeldung 🙌",
+            },
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      },
     });
   }
 
