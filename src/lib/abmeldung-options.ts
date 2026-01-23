@@ -1,12 +1,13 @@
-export function isPrimetime(date: Date): boolean {
-  const h = date.getHours();
-  return h >= 18 && h < 24;
-}
+type Option = { label: string; value: string };
 
-export function lateOptions(date: Date): readonly { label: string; value: string }[] {
-  const h = date.getHours();
-  const opts: { label: string; value: string }[] = [];
+export function primetimeOptions(now: Date): readonly Option[] {
+  const h = now.getHours();
+  const opts: Option[] = [];
 
+  // immer möglich
+  opts.push({ label: "Ganzer Abend (18–24) abwesend", value: "full_evening" });
+
+  // Startzeiten nur, wenn sie noch kommen
   if (h < 19) opts.push({ label: "Komme ab 19 Uhr", value: "late_19" });
   if (h < 20) opts.push({ label: "Komme ab 20 Uhr", value: "late_20" });
   if (h < 21) opts.push({ label: "Komme ab 21 Uhr", value: "late_21" });
