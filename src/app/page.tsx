@@ -7,7 +7,7 @@ type Row={symbol:string;bid:number|null;ask:number|null;spread:number|null;m1:nu
 type Position={id:string;symbol:string;openedAt:number;entry:number;qty:number;cost:number;buyFee:number;score:number};
 type Trade=Position&{closedAt:number;exit:number;sellFee:number;pnl:number;pct:number;reason:string};
 type Paper={running:boolean;cash:number;initial:number;fees:number;positions:Position[];trades:Trade[]};
-type State={online:boolean;serverTime:number;uptimeSeconds:number;config:{feePct:number;targetNetPct:number;stopNetPct:number;scoreThreshold:number;maxPositionEur:number;maxPositions:number};paper:Paper;equity:number;pnl:number;rows:Row[]};
+type State={online:boolean;serverTime:number;uptimeSeconds:number;config:{feePct:number;targetNetPct:number;stopNetPct:number;scoreThreshold:number;minPositionEur:number;maxPositionEur:number;maxPositions:number;positionSizing?:string};paper:Paper;equity:number;pnl:number;rows:Row[]};
 type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:"accepted"|"dismissed"}>};
 
 const eur=(n:number)=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
@@ -123,7 +123,7 @@ export default function Home(){
       <div>
         <small>KRAKEN · 24/7 · PAPER ONLY</small>
         <h1>Second Trend Paper Bot</h1>
-        <p>Der Bot läuft serverseitig auf Railway weiter, auch wenn dein Handy gesperrt ist. Das Dashboard liest denselben persistenten Paper-Kontostand aus PostgreSQL.</p>
+        <p>Der Bot läuft serverseitig auf Railway weiter, auch wenn dein Handy gesperrt ist. Das Dashboard liest denselben persistenten Paper-Kontostand aus dem 24/7-Serverspeicher.</p>
       </div>
       <aside className={data?.online&&paper?.running?"ok":"bad"}>● {data?.online?(paper?.running?"Worker läuft 24/7":"Worker pausiert"):"Verbinde Worker…"}</aside>
     </header>
@@ -131,8 +131,8 @@ export default function Home(){
     {error&&<section className="panel alert"><b>{error}</b><span>Das Dashboard versucht automatisch erneut zu verbinden.</span></section>}
 
     <section className="cards">
-      <b>{eur(data?.equity??100)}<span className={pnl>=0?"up":"down"}>{pnl>=0?"+":""}{eur(pnl)}</span></b>
-      <b>{eur(paper?.cash??100)}<span>freies Cash</span></b>
+      <b>{eur(data?.equity??1000)}<span className={pnl>=0?"up":"down"}>{pnl>=0?"+":""}{eur(pnl)}</span></b>
+      <b>{eur(paper?.cash??1000)}<span>freies Cash</span></b>
       <b>{paper?.positions.length??0}<span>offene Positionen</span></b>
       <b>{eur(paper?.fees??0)}<span>simulierte Gebühren</span></b>
     </section>
@@ -140,7 +140,7 @@ export default function Home(){
     <section className="panel bar">
       <div>
         <h2>24/7 Paper Engine</h2>
-        <p>Kauf ab Score ≥ {data?.config.scoreThreshold??75}, max. {eur(data?.config.maxPositionEur??20)} pro Position, Gewinnziel +{data?.config.targetNetPct??0.25}% netto, Stop {data?.config.stopNetPct??-3}%. Gebührenmodell {data?.config.feePct??0.8}% pro Ausführung.</p>
+        <p>Kauf ab Score ≥ {data?.config.scoreThreshold??75}, dynamisch {eur(data?.config.minPositionEur??100)}–{eur(data?.config.maxPositionEur??500)} pro Position, Gewinnziel +{data?.config.targetNetPct??0.25}% netto, Stop {data?.config.stopNetPct??-3}%. Gebührenmodell {data?.config.feePct??0.8}% pro Ausführung.</p>
       </div>
       <div className="statusStack">
         <span className="pill">{data?.online?"Kraken verbunden":"Kraken offline"}</span>
