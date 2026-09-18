@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Paper Bot">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <title>Second Trend Paper Bot</title>
+  <style>
+    :root{--bg:#07090d;--p:#0d1219;--b:#202b3a;--t:#f4f7fb;--m:#8f9baa;--u:#39d98a;--d:#ff6178;--a:#a99cff}
+    *{box-sizing:border-box}
+    html{background:var(--bg);color-scheme:dark}
+    body{margin:0;background:radial-gradient(circle at 15% 0%,rgba(124,108,255,.13),transparent 31%),var(--bg);color:var(--t);font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif}
+    main{width:min(1180px,calc(100% - 28px));margin:auto;padding:max(24px,env(safe-area-inset-top)) 0 max(28px,env(safe-area-inset-bottom))}
+    header{display:flex;justify-content:space-between;gap:20px;align-items:flex-start}
+    small{color:var(--a);font-weight:900;letter-spacing:.16em}
+    h1{font-size:clamp(38px,6vw,62px);font-weight:400;letter-spacing:-.055em;margin:15px 0 24px}
+    header p{max-width:780px;color:var(--m);font-size:18px;line-height:1.48;margin:0}
+    .status{border:1px solid var(--b);background:rgba(12,17,24,.9);padding:13px 15px;border-radius:14px;font-size:12px;font-weight:800;white-space:nowrap}
+    .ok{color:var(--u)} .bad{color:var(--d)}
+    .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:30px 0 12px}
+    .card,.panel{border:1px solid var(--b);background:rgba(13,18,25,.94);border-radius:18px}
+    .card{padding:24px 26px}
+    .card b{display:block;font-size:36px;letter-spacing:-.035em}
+    .card span{display:block;margin-top:11px;color:var(--m);font-size:13px;font-weight:700}
+    .up{color:var(--u)!important}.down{color:var(--d)!important}
+    .panel{padding:24px 26px;margin-top:12px;overflow:hidden}
+    .panel h2{font-size:27px;font-weight:400;margin:0 0 12px}
+    .panel p{color:var(--m);line-height:1.5;margin:0;font-size:15px}
+    .bar{display:flex;align-items:center;justify-content:space-between;gap:20px}
+    .pills{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+    .pill{border:1px solid var(--b);padding:9px 12px;border-radius:999px;font-size:11px;font-weight:800;color:#b9c3cf}
+    .notice{border-color:rgba(57,217,138,.25)}
+    .notice strong{display:block;color:var(--u);font-size:13px;margin-bottom:5px}
+    .scroll{overflow:auto;margin:5px -26px -24px}
+    table{width:100%;border-collapse:collapse;min-width:860px}
+    th{padding:13px 14px;color:#758298;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+    td{padding:14px;border-top:1px solid rgba(32,43,58,.75);font-size:12px;font-variant-numeric:tabular-nums}
+    td strong.score{display:inline-block;min-width:43px;text-align:center;border-radius:8px;padding:6px;background:rgba(255,255,255,.04)}
+    .hot{color:var(--u);background:rgba(57,217,138,.1)!important}
+    .cold{color:var(--d);background:rgba(255,97,120,.1)!important}
+    .two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    article{display:flex;justify-content:space-between;gap:12px;align-items:center;border-top:1px solid rgba(32,43,58,.75);padding:13px 0}
+    article:first-of-type{border-top:0}
+    article div{display:flex;flex-direction:column;gap:5px;min-width:0}
+    article div b{font-size:13px}
+    article span{font-size:11px;color:var(--m)}
+    article> b{font-size:13px}
+    .empty{color:var(--m);text-align:center;padding:26px 0!important}
+    footer{text-align:center;color:#6f7a89;font-size:11px;padding:22px 0 0}
+    @media(max-width:840px){
+      main{width:min(100% - 24px,720px);padding-top:max(22px,env(safe-area-inset-top))}
+      header,.bar{flex-direction:column}
+      h1{font-size:clamp(40px,10vw,58px)}
+      header p{font-size:16px}
+      .cards{grid-template-columns:1fr;gap:10px}
+      .card{padding:24px 30px}
+      .card b{font-size:38px}
+      .pills{justify-content:flex-start}
+      .two{grid-template-columns:1fr}
+      .panel{padding:23px 28px}
+      .scroll{margin-left:-28px;margin-right:-28px}
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <small>KRAKEN · 24/7 · PAPER ONLY</small>
+      <h1>Second Trend Paper Bot</h1>
+      <p>Der Bot läuft dauerhaft auf Railway weiter, auch wenn dein iPhone gesperrt ist. Diese App liest direkt den laufenden V3-Paper-Kontostand.</p>
+    </div>
+    <div id="status" class="status">● Verbinde Worker…</div>
+  </header>
+
+  <section class="cards">
+    <div class="card"><b id="equity">1.000,00 €</b><span id="pnl" class="up">+0,00 €</span></div>
+    <div class="card"><b id="cash">1.000,00 €</b><span>freies Cash</span></div>
+    <div class="card"><b id="positionsCount">0</b><span>offene Positionen</span></div>
+    <div class="card"><b id="fees">0,00 €</b><span>simulierte Gebühren</span></div>
+  </section>
+
+  <section class="panel bar">
+    <div>
+      <h2>24/7 Paper Engine</h2>
+      <p id="engineText">Kauf ab Score ≥ 75, dynamisch 100–500 € pro Position. Gewinnziel +0,25 % netto, Stop −3 %. Gebührenmodell 0,8 % pro Ausführung.</p>
+    </div>
+    <div class="pills">
+      <span id="krakenPill" class="pill">Kraken offline</span>
+      <span id="uptimePill" class="pill">Uptime 0m</span>
+    </div>
+  </section>
+
+  <section class="panel notice">
+    <strong>Stabile Homebildschirm-Version</strong>
+    <p>Diese URL bleibt gleich. Künftige Updates ersetzen die App an derselben Adresse, damit dein Homebildschirm nicht mehr auf einer alten Preview hängen bleibt.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Live Scanner</h2>
+    <div class="scroll">
+      <table>
+        <thead><tr><th>Markt</th><th>Bid / Ask</th><th>Spread</th><th>1s</th><th>3s</th><th>5s</th><th>OBI</th><th>Score</th></tr></thead>
+        <tbody id="scanner"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="two">
+    <section class="panel">
+      <h2>Offene Positionen</h2>
+      <div id="positions"><p class="empty">Aktuell keine offene Position.</p></div>
+    </section>
+    <section class="panel">
+      <h2>Letzte Trades</h2>
+      <div id="trades"><p class="empty">Noch keine abgeschlossenen Trades.</p></div>
+    </section>
+  </section>
+
+  <footer>Nur Paper Trading · keine Kraken-API-Schlüssel · keine echten Orders · kein echtes Geld</footer>
+</main>
+<script>
+(() => {
+  const q = id => document.getElementById(id);
+  const eur = n => new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(Number(n)||0);
+  const num = n => n == null ? "–" : new Intl.NumberFormat("de-DE",{maximumFractionDigits:6}).format(n);
+  const pct = (n,d=3) => n == null ? "–" : (n>0?"+":"") + Number(n).toFixed(d) + "%";
+  const age = s => {
+    s = Number(s)||0;
+    const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);
+    return h ? h+"h "+m+"m" : m+"m";
+  };
+  const esc = v => String(v??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[m]));
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
+
+  async function load(){
+    try{
+      const r=await fetch("/state",{cache:"no-store"});
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      const d=await r.json();
+      const paper=d.paper||{};
+      const config=d.config||{};
+      const pnl=Number(d.pnl)||0;
+
+      q("status").className="status "+(d.online&&paper.running?"ok":"bad");
+      q("status").textContent="● "+(d.online?(paper.running?"Worker läuft 24/7":"Worker pausiert"):"Kraken offline");
+      q("equity").textContent=eur(d.equity);
+      q("pnl").textContent=(pnl>=0?"+":"")+eur(pnl);
+      q("pnl").className=pnl>=0?"up":"down";
+      q("cash").textContent=eur(paper.cash);
+      q("positionsCount").textContent=(paper.positions||[]).length;
+      q("fees").textContent=eur(paper.fees);
+      q("krakenPill").textContent=d.online?"Kraken verbunden":"Kraken offline";
+      q("uptimePill").textContent="Uptime "+age(d.uptimeSeconds);
+      q("engineText").textContent=
+        "Kauf ab Score ≥ "+(config.scoreThreshold??75)+
+        ", dynamisch "+eur(config.minPositionEur??100)+"–"+eur(config.maxPositionEur??500)+
+        " pro Position. Gewinnziel +"+(config.targetNetPct??0.25)+
+        "% netto, Stop "+(config.stopNetPct??-3)+
+        "%. Gebührenmodell "+(config.feePct??0.8)+"% pro Ausführung.";
+
+      const rows=[...(d.rows||[])].sort((a,b)=>b.score-a.score);
+      q("scanner").innerHTML=rows.map(x=>{
+        const scoreClass=x.score>=75?"hot":x.score<=-75?"cold":"";
+        return "<tr><td><b>"+esc(x.symbol)+"</b></td><td>"+num(x.bid)+" / "+num(x.ask)+"</td><td>"+(x.spread==null?"–":Number(x.spread).toFixed(3)+"%")+"</td>"+
+          "<td class='"+((x.m1??0)>=0?"up":"down")+"'>"+pct(x.m1)+"</td>"+
+          "<td class='"+((x.m3??0)>=0?"up":"down")+"'>"+pct(x.m3)+"</td>"+
+          "<td class='"+((x.m5??0)>=0?"up":"down")+"'>"+pct(x.m5)+"</td>"+
+          "<td class='"+((x.obi??0)>=0?"up":"down")+"'>"+(x.obi==null?"–":Number(x.obi).toFixed(2))+"</td>"+
+          "<td><strong class='score "+scoreClass+"'>"+(x.score>0?"+":"")+x.score+"</strong></td></tr>";
+      }).join("");
+
+      const positions=paper.positions||[];
+      q("positions").innerHTML=positions.length?positions.map(p=>{
+        const seconds=Math.max(0,Math.floor((Date.now()-p.openedAt)/1000));
+        return "<article><div><b>"+esc(p.symbol)+"</b><span>Entry "+num(p.entry)+" · "+eur(p.cost)+" · Score "+p.score+" · Einsatz "+eur(p.budget??p.cost)+"</span></div><b>"+seconds+"s</b></article>";
+      }).join(""):"<p class='empty'>Aktuell keine offene Position.</p>";
+
+      const trades=paper.trades||[];
+      q("trades").innerHTML=trades.length?trades.slice(0,12).map(t=>{
+        return "<article><div><b>"+esc(t.symbol)+"</b><span>"+esc(t.reason)+" · "+num(t.entry)+" → "+num(t.exit)+" · "+pct(t.pct,2)+"</span></div><b class='"+(t.pnl>=0?"up":"down")+"'>"+(t.pnl>=0?"+":"")+eur(t.pnl)+"</b></article>";
+      }).join(""):"<p class='empty'>Noch keine abgeschlossenen Trades.</p>";
+    }catch(e){
+      q("status").className="status bad";
+      q("status").textContent="● Worker nicht erreichbar";
+    }
+  }
+
+  load();
+  setInterval(load,1000);
+})();
+</script>
+</body>
+</html>
