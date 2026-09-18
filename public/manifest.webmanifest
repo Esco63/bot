@@ -1,0 +1,17 @@
+{
+  "name": "Kraken Paper Bot",
+  "short_name": "Paper Bot",
+  "description": "24/7 Kraken Paper-Trading Dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#07090d",
+  "theme_color": "#07090d",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
