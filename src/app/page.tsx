@@ -1,65 +1,22 @@
-import Image from "next/image";
-
-export default function Home() {
-  return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
-  );
-}
+"use client";
+import {useEffect,useMemo,useRef,useState} from "react";
+const SYMS=["BTC/EUR","ETH/EUR","SOL/EUR"] as const; type Sym=(typeof SYMS)[number];
+type Book={b:Map<number,number>;a:Map<number,number>}; type Pt={t:number;p:number};
+type Row={s:Sym;bid:number|null;ask:number|null;sp:number|null;m1:number|null;m3:number|null;m5:number|null;obi:number|null;score:number};
+type Pos={id:string;s:Sym;at:number;entry:number;qty:number;cost:number;buyFee:number;score:number}; type Tr=Pos&{out:number;sellFee:number;pnl:number;pct:number;reason:string};
+type State={cash:number;initial:number;fees:number;pos:Pos[];tr:Tr[]};
+const FEE=.8,TARGET=.25,STOP=-3,KEY="kraken-paper-mvp";
+const eb=():Book=>({b:new Map(),a:new Map()}); const uid=()=>Date.now()+"-"+Math.random().toString(36).slice(2);
+const side=(b:Book,k:"b"|"a")=>[...b[k]].sort((x,y)=>k==="b"?y[0]-x[0]:x[0]-y[0]).slice(0,10);
+function buy(b:Book,cash:number){const a=side(b,"a");if(!a.length)return null;const r=FEE/100,g=cash/(1+r);let l=g,q=0,c=0;for(const [p,v] of a){const u=Math.min(l,p*v);q+=u/p;c+=u;l-=u;if(l<1e-9)break}if(!q)return null;const f=c*r;return{q,c,f,total:c+f,vwap:c/q,fill:c/g}}
+function sell(b:Book,want:number){const d=side(b,"b");if(!d.length)return null;const r=FEE/100;let l=want,q=0,g=0;for(const[p,v]of d){const u=Math.min(l,v);q+=u;g+=u*p;l-=u;if(l<1e-12)break}if(!q)return null;const f=g*r;return{q,g,f,net:g-f,vwap:g/q,fill:q/want}}
+const pc=(a:number,b:number)=>b?((a/b)-1)*100:0; const eur=(n:number)=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n); const fmt=(n:number|null)=>n==null?"–":new Intl.NumberFormat("de-DE",{maximumFractionDigits:6}).format(n);
+function ago(h:Pt[],t:number){for(let i=h.length-1;i>=0;i--)if(h[i].t<=t)return h[i].p;return null} function imbalance(b:Book){const x=side(b,"b").slice(0,5),y=side(b,"a").slice(0,5);if(!x.length||!y.length)return null;const bv=x.reduce((n,z)=>n+z[1],0),av=y.reduce((n,z)=>n+z[1],0);return(bv-av)/(bv+av)}
+function score(m1:number|null,m3:number|null,m5:number|null,o:number|null,sp:number|null){const n=(v:number|null,s:number)=>v==null?0:Math.tanh(v/s);let x=n(m1,.025)*35+n(m3,.05)*25+n(m5,.08)*20+(o??0)*25;if(sp!=null)x-=Math.min(sp/.1,1)*10;return Math.max(-100,Math.min(100,Math.round(x)))}
+export default function Home(){const[online,setOnline]=useState(false),[run,setRun]=useState(false),[rows,setRows]=useState<Row[]>([]),[st,setSt]=useState<State>({cash:100,initial:100,fees:0,pos:[],tr:[]});const tick=useRef(new Map<Sym,{bid?:number;ask?:number}>()),hist=useRef(new Map<Sym,Pt[]>()),books=useRef(new Map<Sym,Book>()),state=useRef(st),running=useRef(run),rrows=useRef<Row[]>([]),last=useRef(new Map<Sym,number>());
+const save=(x:State)=>{state.current=x;setSt(x);try{localStorage.setItem(KEY,JSON.stringify(x))}catch{}};useEffect(()=>{state.current=st},[st]);useEffect(()=>{running.current=run},[run]);useEffect(()=>{try{const v=localStorage.getItem(KEY);if(v){const x=JSON.parse(v);if(x&&Number.isFinite(x.cash))save(x)}}catch{}},[]);
+useEffect(()=>{SYMS.forEach(s=>{hist.current.set(s,[]);books.current.set(s,eb())});let ws:WebSocket|null=null,dead=false,delay=1000;const con=()=>{ws=new WebSocket("wss://ws.kraken.com/v2");ws.onopen=()=>{setOnline(true);delay=1000;const symbol=[...SYMS];ws?.send(JSON.stringify({method:"subscribe",params:{channel:"ticker",symbol,event_trigger:"bbo",snapshot:true}}));ws?.send(JSON.stringify({method:"subscribe",params:{channel:"book",symbol,depth:10,snapshot:true}}))};ws.onmessage=e=>{let m:any;try{m=JSON.parse(e.data)}catch{return}const now=Date.now();if(m.channel==="ticker")for(const x of m.data??[]){if(!SYMS.includes(x.symbol))continue;const z={...(tick.current.get(x.symbol)??{}),...x};tick.current.set(x.symbol,z);if(z.bid&&z.ask){const h=hist.current.get(x.symbol)??[];h.push({t:now,p:(z.bid+z.ask)/2});while(h[0]?.t<now-10000)h.shift();hist.current.set(x.symbol,h)}}if(m.channel==="book")for(const x of m.data??[]){if(!SYMS.includes(x.symbol))continue;const b=m.type==="snapshot"?eb():(books.current.get(x.symbol)??eb());for(const l of x.bids??[])l.qty===0?b.b.delete(l.price):b.b.set(l.price,l.qty);for(const l of x.asks??[])l.qty===0?b.a.delete(l.price):b.a.set(l.price,l.qty);b.b=new Map(side(b,"b"));b.a=new Map(side(b,"a"));books.current.set(x.symbol,b)}};ws.onerror=()=>setOnline(false);ws.onclose=()=>{setOnline(false);if(!dead){setTimeout(con,delay);delay=Math.min(delay*2,30000)}}};con();return()=>{dead=true;ws?.close()}},[]);
+useEffect(()=>{const t=setInterval(()=>{const now=Date.now();const out=SYMS.map(s=>{const x=tick.current.get(s),bid=x?.bid??null,ask=x?.ask??null,mid=bid&&ask?(bid+ask)/2:null,h=hist.current.get(s)??[];const m=(n:number)=>{const p=ago(h,now-n*1000);return mid&&p?pc(mid,p):null};const m1=m(1),m3=m(3),m5=m(5),o=imbalance(books.current.get(s)??eb()),sp=mid&&bid&&ask?((ask-bid)/mid)*100:null;return{s,bid,ask,sp,m1,m3,m5,obi:o,score:score(m1,m3,m5,o,sp)}});rrows.current=out;setRows(out)},250);return()=>clearInterval(t)},[]);
+useEffect(()=>{const t=setInterval(()=>{if(!running.current||!online)return;const now=Date.now();let x={...state.current,pos:[...state.current.pos],tr:[...state.current.tr]},chg=false;for(const p of [...x.pos]){const b=books.current.get(p.s);if(!b)continue;const f=sell(b,p.qty);if(!f||f.fill<.999)continue;const pnl=f.net-p.cost,pp=pc(f.net,p.cost),reason=pp>=TARGET?"Gewinnziel":pp<=STOP?"Stop-Loss":now-p.at>360*60000?"Zeitlimit":"";if(reason){x.cash+=f.net;x.fees+=f.f;x.pos=x.pos.filter(z=>z.id!==p.id);x.tr.unshift({...p,out:f.vwap,sellFee:f.f,pnl,pct:pp,reason});last.current.set(p.s,now);chg=true}}if(x.pos.length<2){for(const r of [...rrows.current].sort((a,b)=>b.score-a.score)){if(x.pos.some(p=>p.s===r.s)||now-(last.current.get(r.s)??0)<20000)continue;if(r.score<75||(r.sp??9)>.1||(r.m1??-1)<=0||(r.m3??-1)<=0||(r.m5??-1)<=0||(r.obi??-1)<=0)continue;const b=books.current.get(r.s),budget=Math.min(x.cash,20);if(!b||budget<5)continue;const f=buy(b,budget);if(f&&f.fill>=.999){x.cash-=f.total;x.fees+=f.f;x.pos.push({id:uid(),s:r.s,at:now,entry:f.vwap,qty:f.q,cost:f.total,buyFee:f.f,score:r.score});last.current.set(r.s,now);chg=true;break}}}if(chg)save(x)},250);return()=>clearInterval(t)},[online]);
+const equity=st.cash+st.pos.reduce((n,p)=>{const b=books.current.get(p.s),f=b?sell(b,p.qty):null;return n+(f&&f.fill>=.999?f.net:p.cost)},0),pnl=equity-st.initial,sorted=useMemo(()=>[...rows].sort((a,b)=>b.score-a.score),[rows]);const reset=()=>{setRun(false);last.current.clear();save({cash:100,initial:100,fees:0,pos:[],tr:[]})};
+return <main><header><div><small>KRAKEN · LIVE · PAPER ONLY</small><h1>Second Trend Paper Bot</h1><p>Sekunden-Trend auf BTC/EUR, ETH/EUR und SOL/EUR. Rein virtuelles Trading mit Bid/Ask, L2-Fills und 0,80 % Taker-Gebühr je Ausführung.</p></div><aside className={online?"ok":"bad"}>● {online?"Kraken live":"Verbinde…"}</aside></header><section className="cards"><b>{eur(equity)}<span className={pnl>=0?"up":"down"}>{pnl>=0?"+":""}{eur(pnl)}</span></b><b>{eur(st.cash)}<span>freies Cash</span></b><b>{st.pos.length}<span>offene Positionen</span></b><b>{eur(st.fees)}<span>simulierte Gebühren</span></b></section><section className="panel bar"><div><h2>Paper Trading</h2><p>Kauf: Score ≥ 75, 1s/3s/5s positiv, OBI positiv, Spread ≤ 0,10 %. Verkauf: +0,25 % netto oder −3 %.</p></div><div><button className="primary" onClick={()=>setRun(v=>!v)}>{run?"Pausieren":"Bot starten"}</button><button onClick={reset}>Reset 100 €</button></div></section><section className="panel"><h2>Live Scanner</h2><div className="scroll"><table><thead><tr><th>Markt</th><th>Bid / Ask</th><th>Spread</th><th>1s</th><th>3s</th><th>5s</th><th>OBI</th><th>Score</th></tr></thead><tbody>{sorted.map(r=><tr key={r.s}><td><b>{r.s}</b></td><td>{fmt(r.bid)} / {fmt(r.ask)}</td><td>{r.sp==null?"–":r.sp.toFixed(3)+"%"}</td>{[r.m1,r.m3,r.m5].map((v,i)=><td key={i} className={(v??0)>=0?"up":"down"}>{v==null?"–":(v>0?"+":"")+v.toFixed(3)+"%"}</td>)}<td className={(r.obi??0)>=0?"up":"down"}>{r.obi==null?"–":r.obi.toFixed(2)}</td><td><strong className={r.score>=75?"hot":r.score<=-75?"cold":""}>{r.score>0?"+":""}{r.score}</strong></td></tr>)}</tbody></table></div></section><section className="two"><section className="panel"><h2>Offene Positionen</h2>{st.pos.length?st.pos.map(p=>{const b=books.current.get(p.s),f=b?sell(b,p.qty):null,n=f?f.net-p.cost:0;return <article key={p.id}><div><b>{p.s}</b><span>Entry {fmt(p.entry)} · Score {p.score}</span></div><b className={n>=0?"up":"down"}>{f?(n>=0?"+":"")+eur(n):"–"}</b></article>}):<p className="empty">Noch keine Position.</p>}</section><section className="panel"><h2>Letzte Trades</h2>{st.tr.length?st.tr.slice(0,12).map((t,i)=><article key={t.id+i}><div><b>{t.s}</b><span>{t.reason} · {fmt(t.entry)} → {fmt(t.out)}</span></div><b className={t.pnl>=0?"up":"down"}>{t.pnl>=0?"+":""}{eur(t.pnl)}</b></article>):<p className="empty">Noch keine Trades.</p>}</section></section><footer>Die V1 läuft im Browser: Seite offen lassen. Zustand wird lokal gespeichert. Keine echten Orders.</footer></main>}
