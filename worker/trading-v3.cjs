@@ -17,6 +17,7 @@ const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || "20000");
 const MAX_HOLD_MS = Number(process.env.MAX_HOLD_MS || String(6*60*60*1000));
 const STARTING_CAPITAL_EUR = Number(process.env.STARTING_CAPITAL_EUR || "1000");
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const STATIC_DIR = process.env.STATIC_DIR || "/tmp/ui";
 
 const startedAt = Date.now();
 let online = false;
@@ -205,6 +206,17 @@ function tradeTick() {
   if(changed)persist();
 }
 
+function sendFile(res,path,type){
+  try{
+    const body=fs.readFileSync(path);
+    res.writeHead(200,{"content-type":type,"cache-control":"no-store"});
+    res.end(body);
+  }catch(e){
+    res.writeHead(404,{"content-type":"text/plain; charset=utf-8"});
+    res.end("not_found");
+  }
+}
+
 function json(res,status,body){
   res.writeHead(status,{
     "content-type":"application/json; charset=utf-8",
@@ -217,6 +229,10 @@ function json(res,status,body){
 
 const server=http.createServer((req,res)=>{
   if(req.method==="OPTIONS")return json(res,204,{});
+  if(req.url==="/" || req.url==="/index.html") return sendFile(res,STATIC_DIR+"/dashboard-v3.html","text/html; charset=utf-8");
+  if(req.url==="/sw.js") return sendFile(res,STATIC_DIR+"/sw-v3.js","application/javascript; charset=utf-8");
+  if(req.url==="/manifest.webmanifest") return sendFile(res,STATIC_DIR+"/manifest-v3.webmanifest","application/manifest+json; charset=utf-8");
+  if(req.url==="/icon.svg") return sendFile(res,STATIC_DIR+"/icon-v3.svg","image/svg+xml");
   if(req.url==="/health")return json(res,200,{ok:true,online,running:paper.running,uptimeSeconds:Math.floor((Date.now()-startedAt)/1000)});
   if(req.url==="/state"){
     const e=equity();
