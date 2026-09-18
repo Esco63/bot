@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 
-const WORKER="https://paper-worker-production-a463.up.railway.app";
+const WORKER="https://paper-worker-runtime-production.up.railway.app";
 
 type Row={symbol:string;bid:number|null;ask:number|null;spread:number|null;m1:number|null;m3:number|null;m5:number|null;obi:number|null;score:number};
 type Position={id:string;symbol:string;openedAt:number;entry:number;qty:number;cost:number;buyFee:number;score:number};
