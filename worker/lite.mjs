@@ -21,7 +21,7 @@ const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "https://paper-worker-runtime-production.up.railway.app";
 
 if(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY){
-  webpush.setVapidDetails(VAPID_SUBJECT,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY);
+  webpush.setVapidDetails(VAPID_SUBJECT,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY);\n  console.log("Web Push ready");
 }
 
 const startedAt = Date.now();
