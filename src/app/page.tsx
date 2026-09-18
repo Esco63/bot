@@ -1,22 +1,135 @@
 "use client";
-import {useEffect,useMemo,useRef,useState} from "react";
-const SYMS=["BTC/EUR","ETH/EUR","SOL/EUR"] as const; type Sym=(typeof SYMS)[number];
-type Book={b:Map<number,number>;a:Map<number,number>}; type Pt={t:number;p:number};
-type Row={s:Sym;bid:number|null;ask:number|null;sp:number|null;m1:number|null;m3:number|null;m5:number|null;obi:number|null;score:number};
-type Pos={id:string;s:Sym;at:number;entry:number;qty:number;cost:number;buyFee:number;score:number}; type Tr=Pos&{out:number;sellFee:number;pnl:number;pct:number;reason:string};
-type State={cash:number;initial:number;fees:number;pos:Pos[];tr:Tr[]};
-const FEE=.8,TARGET=.25,STOP=-3,KEY="kraken-paper-mvp";
-const eb=():Book=>({b:new Map(),a:new Map()}); const uid=()=>Date.now()+"-"+Math.random().toString(36).slice(2);
-const side=(b:Book,k:"b"|"a")=>[...b[k]].sort((x,y)=>k==="b"?y[0]-x[0]:x[0]-y[0]).slice(0,10);
-function buy(b:Book,cash:number){const a=side(b,"a");if(!a.length)return null;const r=FEE/100,g=cash/(1+r);let l=g,q=0,c=0;for(const [p,v] of a){const u=Math.min(l,p*v);q+=u/p;c+=u;l-=u;if(l<1e-9)break}if(!q)return null;const f=c*r;return{q,c,f,total:c+f,vwap:c/q,fill:c/g}}
-function sell(b:Book,want:number){const d=side(b,"b");if(!d.length)return null;const r=FEE/100;let l=want,q=0,g=0;for(const[p,v]of d){const u=Math.min(l,v);q+=u;g+=u*p;l-=u;if(l<1e-12)break}if(!q)return null;const f=g*r;return{q,g,f,net:g-f,vwap:g/q,fill:q/want}}
-const pc=(a:number,b:number)=>b?((a/b)-1)*100:0; const eur=(n:number)=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n); const fmt=(n:number|null)=>n==null?"–":new Intl.NumberFormat("de-DE",{maximumFractionDigits:6}).format(n);
-function ago(h:Pt[],t:number){for(let i=h.length-1;i>=0;i--)if(h[i].t<=t)return h[i].p;return null} function imbalance(b:Book){const x=side(b,"b").slice(0,5),y=side(b,"a").slice(0,5);if(!x.length||!y.length)return null;const bv=x.reduce((n,z)=>n+z[1],0),av=y.reduce((n,z)=>n+z[1],0);return(bv-av)/(bv+av)}
-function score(m1:number|null,m3:number|null,m5:number|null,o:number|null,sp:number|null){const n=(v:number|null,s:number)=>v==null?0:Math.tanh(v/s);let x=n(m1,.025)*35+n(m3,.05)*25+n(m5,.08)*20+(o??0)*25;if(sp!=null)x-=Math.min(sp/.1,1)*10;return Math.max(-100,Math.min(100,Math.round(x)))}
-export default function Home(){const[online,setOnline]=useState(false),[run,setRun]=useState(false),[rows,setRows]=useState<Row[]>([]),[st,setSt]=useState<State>({cash:100,initial:100,fees:0,pos:[],tr:[]});const tick=useRef(new Map<Sym,{bid?:number;ask?:number}>()),hist=useRef(new Map<Sym,Pt[]>()),books=useRef(new Map<Sym,Book>()),state=useRef(st),running=useRef(run),rrows=useRef<Row[]>([]),last=useRef(new Map<Sym,number>());
-const save=(x:State)=>{state.current=x;setSt(x);try{localStorage.setItem(KEY,JSON.stringify(x))}catch{}};useEffect(()=>{if("serviceWorker" in navigator){navigator.serviceWorker.register("/sw.js").catch(()=>{})}},[]);useEffect(()=>{state.current=st},[st]);useEffect(()=>{running.current=run},[run]);useEffect(()=>{try{const v=localStorage.getItem(KEY);if(v){const x=JSON.parse(v);if(x&&Number.isFinite(x.cash))save(x)}}catch{}},[]);
-useEffect(()=>{SYMS.forEach(s=>{hist.current.set(s,[]);books.current.set(s,eb())});let ws:WebSocket|null=null,dead=false,delay=1000;const con=()=>{ws=new WebSocket("wss://ws.kraken.com/v2");ws.onopen=()=>{setOnline(true);delay=1000;const symbol=[...SYMS];ws?.send(JSON.stringify({method:"subscribe",params:{channel:"ticker",symbol,event_trigger:"bbo",snapshot:true}}));ws?.send(JSON.stringify({method:"subscribe",params:{channel:"book",symbol,depth:10,snapshot:true}}))};ws.onmessage=e=>{let m:any;try{m=JSON.parse(e.data)}catch{return}const now=Date.now();if(m.channel==="ticker")for(const x of m.data??[]){if(!SYMS.includes(x.symbol))continue;const z={...(tick.current.get(x.symbol)??{}),...x};tick.current.set(x.symbol,z);if(z.bid&&z.ask){const h=hist.current.get(x.symbol)??[];h.push({t:now,p:(z.bid+z.ask)/2});while(h[0]?.t<now-10000)h.shift();hist.current.set(x.symbol,h)}}if(m.channel==="book")for(const x of m.data??[]){if(!SYMS.includes(x.symbol))continue;const b=m.type==="snapshot"?eb():(books.current.get(x.symbol)??eb());for(const l of x.bids??[])l.qty===0?b.b.delete(l.price):b.b.set(l.price,l.qty);for(const l of x.asks??[])l.qty===0?b.a.delete(l.price):b.a.set(l.price,l.qty);b.b=new Map(side(b,"b"));b.a=new Map(side(b,"a"));books.current.set(x.symbol,b)}};ws.onerror=()=>setOnline(false);ws.onclose=()=>{setOnline(false);if(!dead){setTimeout(con,delay);delay=Math.min(delay*2,30000)}}};con();return()=>{dead=true;ws?.close()}},[]);
-useEffect(()=>{const t=setInterval(()=>{const now=Date.now();const out=SYMS.map(s=>{const x=tick.current.get(s),bid=x?.bid??null,ask=x?.ask??null,mid=bid&&ask?(bid+ask)/2:null,h=hist.current.get(s)??[];const m=(n:number)=>{const p=ago(h,now-n*1000);return mid&&p?pc(mid,p):null};const m1=m(1),m3=m(3),m5=m(5),o=imbalance(books.current.get(s)??eb()),sp=mid&&bid&&ask?((ask-bid)/mid)*100:null;return{s,bid,ask,sp,m1,m3,m5,obi:o,score:score(m1,m3,m5,o,sp)}});rrows.current=out;setRows(out)},250);return()=>clearInterval(t)},[]);
-useEffect(()=>{const t=setInterval(()=>{if(!running.current||!online)return;const now=Date.now();let x={...state.current,pos:[...state.current.pos],tr:[...state.current.tr]},chg=false;for(const p of [...x.pos]){const b=books.current.get(p.s);if(!b)continue;const f=sell(b,p.qty);if(!f||f.fill<.999)continue;const pnl=f.net-p.cost,pp=pc(f.net,p.cost),reason=pp>=TARGET?"Gewinnziel":pp<=STOP?"Stop-Loss":now-p.at>360*60000?"Zeitlimit":"";if(reason){x.cash+=f.net;x.fees+=f.f;x.pos=x.pos.filter(z=>z.id!==p.id);x.tr.unshift({...p,out:f.vwap,sellFee:f.f,pnl,pct:pp,reason});last.current.set(p.s,now);chg=true}}if(x.pos.length<2){for(const r of [...rrows.current].sort((a,b)=>b.score-a.score)){if(x.pos.some(p=>p.s===r.s)||now-(last.current.get(r.s)??0)<20000)continue;if(r.score<75||(r.sp??9)>.1||(r.m1??-1)<=0||(r.m3??-1)<=0||(r.m5??-1)<=0||(r.obi??-1)<=0)continue;const b=books.current.get(r.s),budget=Math.min(x.cash,20);if(!b||budget<5)continue;const f=buy(b,budget);if(f&&f.fill>=.999){x.cash-=f.total;x.fees+=f.f;x.pos.push({id:uid(),s:r.s,at:now,entry:f.vwap,qty:f.q,cost:f.total,buyFee:f.f,score:r.score});last.current.set(r.s,now);chg=true;break}}}if(chg)save(x)},250);return()=>clearInterval(t)},[online]);
-const equity=st.cash+st.pos.reduce((n,p)=>{const b=books.current.get(p.s),f=b?sell(b,p.qty):null;return n+(f&&f.fill>=.999?f.net:p.cost)},0),pnl=equity-st.initial,sorted=useMemo(()=>[...rows].sort((a,b)=>b.score-a.score),[rows]);const reset=()=>{setRun(false);last.current.clear();save({cash:100,initial:100,fees:0,pos:[],tr:[]})};
-return <main><header><div><small>KRAKEN · LIVE · PAPER ONLY</small><h1>Second Trend Paper Bot</h1><p>Sekunden-Trend auf BTC/EUR, ETH/EUR und SOL/EUR. Rein virtuelles Trading mit Bid/Ask, L2-Fills und 0,80 % Taker-Gebühr je Ausführung.</p></div><aside className={online?"ok":"bad"}>● {online?"Kraken live":"Verbinde…"}</aside></header><section className="cards"><b>{eur(equity)}<span className={pnl>=0?"up":"down"}>{pnl>=0?"+":""}{eur(pnl)}</span></b><b>{eur(st.cash)}<span>freies Cash</span></b><b>{st.pos.length}<span>offene Positionen</span></b><b>{eur(st.fees)}<span>simulierte Gebühren</span></b></section><section className="panel bar"><div><h2>Paper Trading</h2><p>Kauf: Score ≥ 75, 1s/3s/5s positiv, OBI positiv, Spread ≤ 0,10 %. Verkauf: +0,25 % netto oder −3 %.</p></div><div><button className="primary" onClick={()=>setRun(v=>!v)}>{run?"Pausieren":"Bot starten"}</button><button onClick={reset}>Reset 100 €</button></div></section><section className="panel"><h2>Live Scanner</h2><div className="scroll"><table><thead><tr><th>Markt</th><th>Bid / Ask</th><th>Spread</th><th>1s</th><th>3s</th><th>5s</th><th>OBI</th><th>Score</th></tr></thead><tbody>{sorted.map(r=><tr key={r.s}><td><b>{r.s}</b></td><td>{fmt(r.bid)} / {fmt(r.ask)}</td><td>{r.sp==null?"–":r.sp.toFixed(3)+"%"}</td>{[r.m1,r.m3,r.m5].map((v,i)=><td key={i} className={(v??0)>=0?"up":"down"}>{v==null?"–":(v>0?"+":"")+v.toFixed(3)+"%"}</td>)}<td className={(r.obi??0)>=0?"up":"down"}>{r.obi==null?"–":r.obi.toFixed(2)}</td><td><strong className={r.score>=75?"hot":r.score<=-75?"cold":""}>{r.score>0?"+":""}{r.score}</strong></td></tr>)}</tbody></table></div></section><section className="two"><section className="panel"><h2>Offene Positionen</h2>{st.pos.length?st.pos.map(p=>{const b=books.current.get(p.s),f=b?sell(b,p.qty):null,n=f?f.net-p.cost:0;return <article key={p.id}><div><b>{p.s}</b><span>Entry {fmt(p.entry)} · Score {p.score}</span></div><b className={n>=0?"up":"down"}>{f?(n>=0?"+":"")+eur(n):"–"}</b></article>}):<p className="empty">Noch keine Position.</p>}</section><section className="panel"><h2>Letzte Trades</h2>{st.tr.length?st.tr.slice(0,12).map((t,i)=><article key={t.id+i}><div><b>{t.s}</b><span>{t.reason} · {fmt(t.entry)} → {fmt(t.out)}</span></div><b className={t.pnl>=0?"up":"down"}>{t.pnl>=0?"+":""}{eur(t.pnl)}</b></article>):<p className="empty">Noch keine Trades.</p>}</section></section><footer>PWA bereit für den Homebildschirm. Bis der 24/7-Worker verbunden ist, läuft die Trading-Engine noch im Browser. Keine echten Orders.</footer></main>}
+import {useEffect,useMemo,useState} from "react";
+
+const WORKER="https://paper-worker-production-a463.up.railway.app";
+
+type Row={symbol:string;bid:number|null;ask:number|null;spread:number|null;m1:number|null;m3:number|null;m5:number|null;obi:number|null;score:number};
+type Position={id:string;symbol:string;openedAt:number;entry:number;qty:number;cost:number;buyFee:number;score:number};
+type Trade=Position&{closedAt:number;exit:number;sellFee:number;pnl:number;pct:number;reason:string};
+type Paper={running:boolean;cash:number;initial:number;fees:number;positions:Position[];trades:Trade[]};
+type State={online:boolean;serverTime:number;uptimeSeconds:number;config:{feePct:number;targetNetPct:number;stopNetPct:number;scoreThreshold:number;maxPositionEur:number;maxPositions:number};paper:Paper;equity:number;pnl:number;rows:Row[]};
+type InstallPromptEvent=Event&{prompt:()=>Promise<void>;userChoice:Promise<{outcome:"accepted"|"dismissed"}>};
+
+const eur=(n:number)=>new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(n);
+const fmt=(n:number|null)=>n==null?"–":new Intl.NumberFormat("de-DE",{maximumFractionDigits:6}).format(n);
+const signed=(n:number|null,d=3)=>n==null?"–":(n>0?"+":"")+n.toFixed(d)+"%";
+const age=(s:number)=>{const h=Math.floor(s/3600),m=Math.floor((s%3600)/60);return h?h+"h "+m+"m":m+"m"};
+
+export default function Home(){
+  const[data,setData]=useState<State|null>(null);
+  const[error,setError]=useState("");
+  const[install,setInstall]=useState<InstallPromptEvent|null>(null);
+  const[standalone,setStandalone]=useState(false);
+
+  useEffect(()=>{
+    if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
+    const nav=navigator as Navigator&{standalone?:boolean};
+    setStandalone(window.matchMedia("(display-mode: standalone)").matches||nav.standalone===true);
+    const onPrompt=(e:Event)=>{e.preventDefault();setInstall(e as InstallPromptEvent)};
+    window.addEventListener("beforeinstallprompt",onPrompt);
+    return()=>window.removeEventListener("beforeinstallprompt",onPrompt);
+  },[]);
+
+  useEffect(()=>{
+    let dead=false;
+    const load=async()=>{
+      try{
+        const r=await fetch(WORKER+"/state",{cache:"no-store"});
+        if(!r.ok)throw new Error("HTTP "+r.status);
+        const j=await r.json() as State;
+        if(!dead){setData(j);setError("")}
+      }catch{
+        if(!dead)setError("24/7-Worker gerade nicht erreichbar");
+      }
+    };
+    load();
+    const t=setInterval(load,1000);
+    return()=>{dead=true;clearInterval(t)};
+  },[]);
+
+  const rows=useMemo(()=>[...(data?.rows??[])].sort((a,b)=>b.score-a.score),[data]);
+  const paper=data?.paper;
+  const pnl=data?.pnl??0;
+
+  const installApp=async()=>{
+    if(!install)return;
+    await install.prompt();
+    await install.userChoice;
+    setInstall(null);
+  };
+
+  return <main>
+    <header>
+      <div>
+        <small>KRAKEN · 24/7 · PAPER ONLY</small>
+        <h1>Second Trend Paper Bot</h1>
+        <p>Der Bot läuft serverseitig auf Railway weiter, auch wenn dein Handy gesperrt ist. Das Dashboard liest denselben persistenten Paper-Kontostand aus PostgreSQL.</p>
+      </div>
+      <aside className={data?.online&&paper?.running?"ok":"bad"}>● {data?.online?(paper?.running?"Worker läuft 24/7":"Worker pausiert"):"Verbinde Worker…"}</aside>
+    </header>
+
+    {error&&<section className="panel alert"><b>{error}</b><span>Das Dashboard versucht automatisch erneut zu verbinden.</span></section>}
+
+    <section className="cards">
+      <b>{eur(data?.equity??100)}<span className={pnl>=0?"up":"down"}>{pnl>=0?"+":""}{eur(pnl)}</span></b>
+      <b>{eur(paper?.cash??100)}<span>freies Cash</span></b>
+      <b>{paper?.positions.length??0}<span>offene Positionen</span></b>
+      <b>{eur(paper?.fees??0)}<span>simulierte Gebühren</span></b>
+    </section>
+
+    <section className="panel bar">
+      <div>
+        <h2>24/7 Paper Engine</h2>
+        <p>Kauf ab Score ≥ {data?.config.scoreThreshold??75}, max. {eur(data?.config.maxPositionEur??20)} pro Position, Gewinnziel +{data?.config.targetNetPct??0.25}% netto, Stop {data?.config.stopNetPct??-3}%. Gebührenmodell {data?.config.feePct??0.8}% pro Ausführung.</p>
+      </div>
+      <div className="statusStack">
+        <span className="pill">{data?.online?"Kraken verbunden":"Kraken offline"}</span>
+        <span className="pill">Uptime {age(data?.uptimeSeconds??0)}</span>
+      </div>
+    </section>
+
+    {!standalone&&<section className="panel installBox">
+      <div>
+        <h2>Auf den Homebildschirm</h2>
+        <p>{install?"Du kannst die Webapp direkt installieren.":"iPhone/iPad: In Safari „Teilen“ → „Zum Home-Bildschirm“. Danach öffnet sie sich wie eine App."}</p>
+      </div>
+      {install&&<button className="primary" onClick={installApp}>App installieren</button>}
+    </section>}
+
+    <section className="panel">
+      <h2>Live Scanner</h2>
+      <div className="scroll"><table>
+        <thead><tr><th>Markt</th><th>Bid / Ask</th><th>Spread</th><th>1s</th><th>3s</th><th>5s</th><th>OBI</th><th>Score</th></tr></thead>
+        <tbody>{rows.map(r=><tr key={r.symbol}>
+          <td><b>{r.symbol}</b></td>
+          <td>{fmt(r.bid)} / {fmt(r.ask)}</td>
+          <td>{r.spread==null?"–":r.spread.toFixed(3)+"%"}</td>
+          <td className={(r.m1??0)>=0?"up":"down"}>{signed(r.m1)}</td>
+          <td className={(r.m3??0)>=0?"up":"down"}>{signed(r.m3)}</td>
+          <td className={(r.m5??0)>=0?"up":"down"}>{signed(r.m5)}</td>
+          <td className={(r.obi??0)>=0?"up":"down"}>{r.obi==null?"–":r.obi.toFixed(2)}</td>
+          <td><strong className={r.score>=75?"hot":r.score<=-75?"cold":""}>{r.score>0?"+":""}{r.score}</strong></td>
+        </tr>)}</tbody>
+      </table></div>
+    </section>
+
+    <section className="two">
+      <section className="panel">
+        <h2>Offene Positionen</h2>
+        {paper?.positions.length?paper.positions.map(p=><article key={p.id}>
+          <div><b>{p.symbol}</b><span>Entry {fmt(p.entry)} · {eur(p.cost)} · Score {p.score}</span></div>
+          <b>{Math.max(0,Math.floor((Date.now()-p.openedAt)/1000))}s</b>
+        </article>):<p className="empty">Aktuell keine offene Position.</p>}
+      </section>
+      <section className="panel">
+        <h2>Letzte Trades</h2>
+        {paper?.trades.length?paper.trades.slice(0,12).map((t,i)=><article key={t.id+i}>
+          <div><b>{t.symbol}</b><span>{t.reason} · {fmt(t.entry)} → {fmt(t.exit)} · {signed(t.pct,2)}</span></div>
+          <b className={t.pnl>=0?"up":"down"}>{t.pnl>=0?"+":""}{eur(t.pnl)}</b>
+        </article>):<p className="empty">Noch keine abgeschlossenen Trades.</p>}
+      </section>
+    </section>
+
+    <footer>Nur Paper Trading: keine Kraken-API-Schlüssel, keine echten Orders, kein echtes Geld. Serverzustand wird dauerhaft gespeichert.</footer>
+  </main>
+}
