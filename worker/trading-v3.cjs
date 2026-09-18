@@ -228,13 +228,14 @@ function json(res,status,body){
 }
 
 const server=http.createServer((req,res)=>{
+  const pathname=new URL(req.url||"/","http://localhost").pathname;
   if(req.method==="OPTIONS")return json(res,204,{});
-  if(req.url==="/" || req.url==="/index.html") return sendFile(res,STATIC_DIR+"/dashboard-v3.html","text/html; charset=utf-8");
-  if(req.url==="/sw.js") return sendFile(res,STATIC_DIR+"/sw-v3.js","application/javascript; charset=utf-8");
-  if(req.url==="/manifest.webmanifest") return sendFile(res,STATIC_DIR+"/manifest-v3.webmanifest","application/manifest+json; charset=utf-8");
-  if(req.url==="/icon.svg") return sendFile(res,STATIC_DIR+"/icon-v3.svg","image/svg+xml");
-  if(req.url==="/health")return json(res,200,{ok:true,online,running:paper.running,uptimeSeconds:Math.floor((Date.now()-startedAt)/1000)});
-  if(req.url==="/state"){
+  if(pathname==="/" || pathname==="/index.html") return sendFile(res,STATIC_DIR+"/dashboard-v3.html","text/html; charset=utf-8");
+  if(pathname==="/sw.js") return sendFile(res,STATIC_DIR+"/sw-v3.js","application/javascript; charset=utf-8");
+  if(pathname==="/manifest.webmanifest") return sendFile(res,STATIC_DIR+"/manifest-v3.webmanifest","application/manifest+json; charset=utf-8");
+  if(pathname==="/icon.svg") return sendFile(res,STATIC_DIR+"/icon-v3.svg","image/svg+xml");
+  if(pathname==="/health")return json(res,200,{ok:true,online,running:paper.running,uptimeSeconds:Math.floor((Date.now()-startedAt)/1000)});
+  if(pathname==="/state"){
     const e=equity();
     return json(res,200,{
       online,
