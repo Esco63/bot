@@ -4,7 +4,7 @@ const {spawn}=require("node:child_process");
 const PORT=Number(process.env.PORT||3000);
 const TRADER_PORT=3001;
 const VERSION="supervisor-v5-20260918";
-const TRADER_URL="https://raw.githubusercontent.com/Esco63/bot/d49eaf1f2031592532728db716c167e299a6e511/worker/trading-v3.cjs";
+const TRADER_URL="https://raw.githubusercontent.com/Esco63/bot/aacfca0fcf101735f52ef325439aef033302fee9/worker/trading-v3.cjs";
 const TRADER_FILE="/tmp/trader-v3.cjs";
 
 const HTML=`<!doctype html><html lang="de"><head>
