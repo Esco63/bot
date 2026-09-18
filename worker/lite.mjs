@@ -1,5 +1,6 @@
 import http from "node:http";
 import fs from "node:fs";
+import webpush from "web-push";
 
 const PORT = Number(process.env.PORT || 3000);
 const DATA_FILE = process.env.DATA_FILE || "/data/paper-state.json";
@@ -14,6 +15,14 @@ const COOLDOWN_MS = Number(process.env.COOLDOWN_MS || "20000");
 const MAX_HOLD_MS = Number(process.env.MAX_HOLD_MS || String(6*60*60*1000));
 const STARTING_CAPITAL_EUR = Number(process.env.STARTING_CAPITAL_EUR || "100");
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "*";
+const PUSH_FILE = process.env.PUSH_FILE || "/data/push-subscriptions.json";
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || "";
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || "";
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || "https://paper-worker-runtime-production.up.railway.app";
+
+if(VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY){
+  webpush.setVapidDetails(VAPID_SUBJECT,VAPID_PUBLIC_KEY,VAPID_PRIVATE_KEY);
+}
 
 const startedAt = Date.now();
 let online = false;
@@ -24,6 +33,54 @@ const books = new Map(SYMBOLS.map(s=>[s,{bids:new Map(),asks:new Map()}]));
 const ticks = new Map();
 const histories = new Map(SYMBOLS.map(s=>[s,[]]));
 const lastTradeAt = new Map();
+let pushSubscriptions = [];
+try{
+  if(fs.existsSync(PUSH_FILE)){
+    const savedPush=JSON.parse(fs.readFileSync(PUSH_FILE,"utf8"));
+    if(Array.isArray(savedPush)) pushSubscriptions=savedPush;
+  }
+}catch(e){console.error("push-load",e)}
+
+function persistPush(){
+  try{
+    fs.mkdirSync("/data",{recursive:true});
+    const tmp=PUSH_FILE+".tmp";
+    fs.writeFileSync(tmp,JSON.stringify(pushSubscriptions));
+    fs.renameSync(tmp,PUSH_FILE);
+  }catch(e){console.error("push-persist",e)}
+}
+
+async function sendPushToAll(payload){
+  if(!VAPID_PUBLIC_KEY||!VAPID_PRIVATE_KEY||!pushSubscriptions.length)return;
+  const next=[];
+  for(const sub of pushSubscriptions){
+    try{
+      await webpush.sendNotification(sub,JSON.stringify(payload),{TTL:3600,urgency:"high"});
+      next.push(sub);
+    }catch(e){
+      const status=e?.statusCode||0;
+      if(status!==404&&status!==410){
+        console.error("push-send",status,e?.message||e);
+        next.push(sub);
+      }
+    }
+  }
+  if(next.length!==pushSubscriptions.length){
+    pushSubscriptions=next;
+    persistPush();
+  }
+}
+
+async function notifySuccessfulTrade(trade){
+  const plus=trade.pnl>=0?"+":"";
+  const balance=equity();
+  await sendPushToAll({
+    title:"✅ Paper-Trade erfolgreich",
+    body:trade.symbol+": "+plus+trade.pnl.toFixed(2)+" € ("+plus+trade.pct.toFixed(2)+"%) · Konto "+balance.toFixed(2)+" €",
+    tag:"trade-"+trade.id+"-"+trade.closedAt,
+    url:"/"
+  });
+}
 
 let paper = {
   running:true,
@@ -104,8 +161,10 @@ function tradeTick(){
     const reason=pp>=TARGET_NET_PCT?"Gewinnziel":pp<=STOP_NET_PCT?"Stop-Loss":now-p.openedAt>=MAX_HOLD_MS?"Zeitlimit":"";
     if(!reason)continue;
     paper.cash+=f.net;paper.fees+=f.fee;paper.positions=paper.positions.filter(x=>x.id!==p.id);
-    paper.trades.unshift({...p,closedAt:now,exit:f.vwap,sellFee:f.fee,pnl,pct:pp,reason});
+    const closedTrade={...p,closedAt:now,exit:f.vwap,sellFee:f.fee,pnl,pct:pp,reason};
+    paper.trades.unshift(closedTrade);
     paper.trades=paper.trades.slice(0,1000);lastTradeAt.set(p.symbol,now);changed=true;
+    if(pnl>0)notifySuccessfulTrade(closedTrade).catch(e=>console.error("trade-push",e));
   }
   if(paper.positions.length<MAX_POSITIONS){
     for(const row of [...latestRows].sort((a,b)=>b.score-a.score)){
@@ -122,10 +181,42 @@ function tradeTick(){
   if(changed)persist();
 }
 function json(res,status,body){
-  res.writeHead(status,{"content-type":"application/json; charset=utf-8","access-control-allow-origin":CORS_ORIGIN,"cache-control":"no-store"});
+  res.writeHead(status,{"content-type":"application/json; charset=utf-8","access-control-allow-origin":CORS_ORIGIN,"access-control-allow-methods":"GET,POST,OPTIONS","access-control-allow-headers":"content-type","cache-control":"no-store"});
   res.end(JSON.stringify(body));
 }
-const server=http.createServer((req,res)=>{
+async function readJson(req){
+  const chunks=[];let size=0;
+  for await(const chunk of req){
+    size+=chunk.length;
+    if(size>100000)throw new Error("body_too_large");
+    chunks.push(chunk);
+  }
+  return JSON.parse(Buffer.concat(chunks).toString("utf8")||"{}");
+}
+const server=http.createServer(async(req,res)=>{
+  if(req.method==="OPTIONS")return json(res,204,{});
+  if(req.url==="/push/public-key"&&req.method==="GET")return json(res,200,{publicKey:VAPID_PUBLIC_KEY});
+  if(req.url==="/push/subscribe"&&req.method==="POST"){
+    try{
+      const sub=await readJson(req);
+      if(!sub?.endpoint||!sub?.keys?.p256dh||!sub?.keys?.auth)return json(res,400,{error:"invalid_subscription"});
+      const i=pushSubscriptions.findIndex(x=>x.endpoint===sub.endpoint);
+      if(i>=0)pushSubscriptions[i]=sub; else pushSubscriptions.push(sub);
+      persistPush();
+      try{
+        await webpush.sendNotification(sub,JSON.stringify({
+          title:"🔔 Mitteilungen aktiviert",
+          body:"Du bekommst ab jetzt eine Nachricht bei erfolgreichen Paper-Trades.",
+          tag:"push-enabled",
+          url:"/"
+        }),{TTL:300,urgency:"high"});
+      }catch(e){console.error("push-test",e?.statusCode||"",e?.message||e)}
+      return json(res,200,{ok:true,subscriptions:pushSubscriptions.length});
+    }catch(e){
+      console.error("push-subscribe",e);
+      return json(res,400,{error:"bad_request"});
+    }
+  }
   if(req.url==="/health")return json(res,200,{ok:true,online,running:paper.running,uptimeSeconds:Math.floor((Date.now()-startedAt)/1000)});
   if(req.url==="/state"){
     const e=equity();
