@@ -20,6 +20,8 @@ export default function Home(){
   const[error,setError]=useState("");
   const[install,setInstall]=useState<InstallPromptEvent|null>(null);
   const[standalone,setStandalone]=useState(false);
+  const[pushState,setPushState]=useState<"off"|"loading"|"on"|"denied"|"unsupported">("off");
+  const[pushMessage,setPushMessage]=useState("");
 
   useEffect(()=>{
     if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(()=>{});
@@ -27,6 +29,15 @@ export default function Home(){
     setStandalone(window.matchMedia("(display-mode: standalone)").matches||nav.standalone===true);
     const onPrompt=(e:Event)=>{e.preventDefault();setInstall(e as InstallPromptEvent)};
     window.addEventListener("beforeinstallprompt",onPrompt);
+    if(!("Notification" in window)||!("PushManager" in window)||!("serviceWorker" in navigator)){
+      setPushState("unsupported");
+    }else{
+      navigator.serviceWorker.ready.then(reg=>reg.pushManager.getSubscription()).then(sub=>{
+        if(Notification.permission==="denied")setPushState("denied");
+        else if(sub&&Notification.permission==="granted")setPushState("on");
+        else setPushState("off");
+      }).catch(()=>setPushState("off"));
+    }
     return()=>window.removeEventListener("beforeinstallprompt",onPrompt);
   },[]);
 
@@ -56,6 +67,55 @@ export default function Home(){
     await install.prompt();
     await install.userChoice;
     setInstall(null);
+  };
+
+  const toUint8=(value:string)=>{
+    const padding="=".repeat((4-value.length%4)%4);
+    const base64=(value+padding).replace(/-/g,"+").replace(/_/g,"/");
+    const raw=window.atob(base64);
+    return Uint8Array.from([...raw].map(ch=>ch.charCodeAt(0)));
+  };
+
+  const enablePush=async()=>{
+    setPushMessage("");
+    if(!("Notification" in window)||!("PushManager" in window)||!("serviceWorker" in navigator)){
+      setPushState("unsupported");
+      setPushMessage("Dieser Browser unterstützt Web-Push nicht.");
+      return;
+    }
+    if(!standalone){
+      setPushMessage("Öffne die Webapp zuerst über das Homebildschirm-Icon und aktiviere die Mitteilungen dort.");
+      return;
+    }
+    setPushState("loading");
+    try{
+      const permission=await Notification.requestPermission();
+      if(permission!=="granted"){
+        setPushState(permission==="denied"?"denied":"off");
+        setPushMessage("Mitteilungen wurden nicht erlaubt.");
+        return;
+      }
+      const reg=await navigator.serviceWorker.ready;
+      const keyRes=await fetch(WORKER+"/push/public-key",{cache:"no-store"});
+      if(!keyRes.ok)throw new Error("Push-Key nicht erreichbar");
+      const {publicKey}=await keyRes.json() as {publicKey:string};
+      if(!publicKey)throw new Error("Push ist serverseitig noch nicht konfiguriert");
+      let sub=await reg.pushManager.getSubscription();
+      if(!sub){
+        sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:toUint8(publicKey)});
+      }
+      const r=await fetch(WORKER+"/push/subscribe",{
+        method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify(sub.toJSON())
+      });
+      if(!r.ok)throw new Error("Subscription konnte nicht gespeichert werden");
+      setPushState("on");
+      setPushMessage("Aktiviert ✓ Eine Test-Mitteilung sollte gleich erscheinen.");
+    }catch(e){
+      setPushState("off");
+      setPushMessage(e instanceof Error?e.message:"Mitteilungen konnten nicht aktiviert werden.");
+    }
   };
 
   return <main>
@@ -95,6 +155,17 @@ export default function Home(){
       </div>
       {install&&<button className="primary" onClick={installApp}>App installieren</button>}
     </section>}
+
+    <section className="panel installBox">
+      <div>
+        <h2>iPhone-Mitteilungen</h2>
+        <p>{pushState==="on"?"Aktiv: Du bekommst bei jedem profitabel geschlossenen Paper-Trade eine Push-Mitteilung.":pushState==="denied"?"Mitteilungen sind in iOS blockiert. Erlaube sie in den iPhone-Einstellungen für diese Webapp.":pushState==="unsupported"?"Web-Push ist in diesem Browser nicht verfügbar.":"Aktiviere Push, damit erfolgreiche Trades auch bei geschlossener App auf deinem iPhone erscheinen."}</p>
+        {pushMessage&&<p className="pushMessage">{pushMessage}</p>}
+      </div>
+      <button className={pushState==="on"?"pushOn":"primary"} onClick={enablePush} disabled={pushState==="loading"||pushState==="on"||pushState==="unsupported"}>
+        {pushState==="loading"?"Aktiviere…":pushState==="on"?"Mitteilungen aktiv ✓":pushState==="denied"?"In iOS erlauben":"Mitteilungen aktivieren"}
+      </button>
+    </section>
 
     <section className="panel">
       <h2>Live Scanner</h2>
