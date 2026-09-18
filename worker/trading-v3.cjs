@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const PORT = Number(process.env.PORT || 3000);
 const DATA_FILE = process.env.DATA_FILE || "/data/paper-state.json";
 const PORTFOLIO_VERSION = process.env.PORTFOLIO_VERSION || "v3-1000-dynamic";
-const SYMBOLS = ["BTC/EUR","ETH/EUR","SOL/EUR"];
+const SYMBOLS = ["BTC/EUR","ETH/EUR","SOL/EUR","XRP/EUR","ADA/EUR","DOGE/EUR","LTC/EUR","AVAX/EUR","DOT/EUR","TRX/EUR","POL/EUR","SHIB/EUR"];
 
 const FEE_PCT = Number(process.env.FEE_PCT || "0.8");
 const TARGET_NET_PCT = Number(process.env.TARGET_NET_PCT || "0.25");
