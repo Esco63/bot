@@ -1,7 +1,7 @@
 "use client";
 import {useEffect,useMemo,useState} from "react";
 
-const WORKER="https://paper-worker-runtime-production.up.railway.app";
+const WORKER="https://paper-worker-v3-production.up.railway.app";
 
 type Row={symbol:string;bid:number|null;ask:number|null;spread:number|null;m1:number|null;m3:number|null;m5:number|null;obi:number|null;score:number};
 type Position={id:string;symbol:string;openedAt:number;entry:number;qty:number;cost:number;buyFee:number;score:number};
@@ -159,12 +159,9 @@ export default function Home(){
     <section className="panel installBox">
       <div>
         <h2>iPhone-Mitteilungen</h2>
-        <p>{pushState==="on"?"Aktiv: Du bekommst bei jedem profitabel geschlossenen Paper-Trade eine Push-Mitteilung.":pushState==="denied"?"Mitteilungen sind in iOS blockiert. Erlaube sie in den iPhone-Einstellungen für diese Webapp.":pushState==="unsupported"?"Web-Push ist in diesem Browser nicht verfügbar.":"Aktiviere Push, damit erfolgreiche Trades auch bei geschlossener App auf deinem iPhone erscheinen."}</p>
-        {pushMessage&&<p className="pushMessage">{pushMessage}</p>}
+        <p>Werden als nächster Schritt separat an den stabilen V3-Worker angebunden. Das 24/7 Paper-Trading läuft davon unabhängig weiter.</p>
       </div>
-      <button className={pushState==="on"?"pushOn":"primary"} onClick={enablePush} disabled={pushState==="loading"||pushState==="on"||pushState==="unsupported"}>
-        {pushState==="loading"?"Aktiviere…":pushState==="on"?"Mitteilungen aktiv ✓":pushState==="denied"?"In iOS erlauben":"Mitteilungen aktivieren"}
-      </button>
+      <button className="pushOn" disabled>Push folgt</button>
     </section>
 
     <section className="panel">
